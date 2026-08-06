@@ -1,0 +1,17 @@
+---
+- name: Uninstall Atlassian Jira Data Center
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    jira_remove_install_dir: true
+    jira_remove_home: true
+    jira_remove_shared_home: true
+    jira_remove_user: true
+    jira_remove_group: true
+
+  tasks:
+    - import_role:
+        name: jira
+        tasks_from: uninstall

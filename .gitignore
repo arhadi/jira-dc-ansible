@@ -1,0 +1,22 @@
+# Ansible retry files
+*.retry
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+
+# Temporary
+*.log
+
+# SSH Keys
+*.pem
+*.key
+
+# Mac
+.DS_Store
+
+# Backup
+*.bak

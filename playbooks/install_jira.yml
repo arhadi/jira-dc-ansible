@@ -1,0 +1,27 @@
+---
+- name: Install Atlassian Jira Data Center
+  hosts: jira
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ../inventory/group_vars/jira.yml
+
+  pre_tasks:
+    - name: Detect JAVA_HOME
+      ansible.builtin.command:
+        cmd: readlink -f /usr/bin/java
+      register: java_binary
+      changed_when: false
+
+    - name: Fail if Java is not installed
+      ansible.builtin.fail:
+        msg: "Java is not installed. Run the prerequisites role first."
+      when: java_binary.rc != 0
+
+    - name: Set JAVA_HOME
+      ansible.builtin.set_fact:
+        java_home: "{{ java_binary.stdout | dirname | dirname }}"
+
+  roles:
+    - jira

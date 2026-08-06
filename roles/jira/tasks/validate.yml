@@ -1,0 +1,189 @@
+---
+- name: Verify Jira installation directory
+  stat:
+    path: "{{ jira_install_dir }}"
+  register: jira_install
+
+- name: Verify Jira startup script
+  stat:
+    path: "{{ jira_install_dir }}/bin/start-jira.sh"
+  register: jira_start
+
+- name: Verify Jira shutdown script
+  stat:
+    path: "{{ jira_install_dir }}/bin/stop-jira.sh"
+  register: jira_stop
+
+- name: Verify PostgreSQL JDBC driver
+  stat:
+    path: "{{ jira_install_dir }}/lib/{{ jira_db_jdbc_jar }}"
+  register: jdbc_driver
+
+
+###############################################################################
+# Jira Home
+###############################################################################
+
+- name: Verify Jira home directory
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}"
+  register: jira_home
+
+- name: Verify dbconfig.xml
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}/dbconfig.xml"
+  register: jira_dbconfig
+
+- name: Verify cluster.properties
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}/cluster.properties"
+  register: jira_cluster
+  when: jira_deployment_mode == "cluster"
+
+###############################################################################
+# Shared Home
+###############################################################################
+
+- name: Verify Jira shared home
+  ansible.builtin.stat:
+    path: "{{ jira_shared_dir }}"
+  register: shared_home
+  when: jira_deployment_mode == "cluster"
+
+- name: Verify shared home exists
+  ansible.builtin.assert:
+    that:
+      - shared_home.stat.exists
+      - shared_home.stat.isdir
+    fail_msg: "Jira shared home {{ jira_shared_dir }} does not exist."
+  when: jira_deployment_mode == "cluster"
+
+###############################################################################
+# Service
+###############################################################################
+
+- name: Check Jira service status
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ jira_service_name }}
+  register: jira_service_status
+  changed_when: false
+  failed_when: false
+
+- name: Verify Jira service is running
+  ansible.builtin.assert:
+    that:
+      - jira_service_status.stdout == "active"
+    fail_msg: "Jira service is not running."
+
+###############################################################################
+# Process
+###############################################################################
+
+- name: Check Java process
+  ansible.builtin.shell: >
+    ps -ef | grep '[j]ava' | grep "{{ jira_install_dir }}"
+  register: java_process
+  changed_when: false
+  failed_when: false
+
+- name: Verify Java process
+  ansible.builtin.assert:
+    that:
+      - java_process.rc == 0
+    fail_msg: "Jira Java process is not running."
+
+- name: Verify PID file
+  stat:
+    path: "{{ jira_pid_file }}"
+  register: jira_pid
+
+- name: Check listening port
+  wait_for:
+    port: "{{ jira_http_port }}"
+    timeout: 5
+  when: jira_service_started
+
+- name: Verify HTTP
+  ansible.builtin.uri:
+    url: "http://localhost:{{ jira_http_port }}{{ jira_context_path }}/"
+    follow_redirects: none
+    status_code:
+      - 200
+      - 302
+  register: jira_http
+
+- name: Verify HTTP response
+  ansible.builtin.assert:
+    that:
+      - jira_http.status in [200, 302]
+    fail_msg: "Jira HTTP endpoint is unavailable."
+
+- name: Verify PostgreSQL host
+  wait_for:
+    host: "{{ jira_db_host }}"
+    port: "{{ jira_db_port }}"
+    timeout: 5
+
+- name: Verify Java version
+  command: "{{ java_home }}/bin/java -version"
+  register: java_version
+  changed_when: false
+
+- name: Get installation ownership
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}"
+  register: install_owner
+
+- name: Verify installation ownership
+  assert:
+    that:
+      - install_owner.stat.pw_name == jira_user
+      - install_owner.stat.gr_name == jira_group
+    fail_msg: "Incorrect ownership on {{ jira_install_dir }}"
+
+- name: Verify logs directory
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}/logs"
+  register: jira_logs
+
+- name: Validate logs directory
+  ansible.builtin.assert:
+    that:
+      - jira_logs.stat.exists
+      - jira_logs.stat.isdir
+    fail_msg: "Logs directory is missing."
+
+- name: Verify cluster node ID
+  command:
+    cmd: grep "jira.node.id={{ jira_node_id }}" {{ jira_home_dir }}/cluster.properties
+  changed_when: false
+  when: jira_deployment_mode == "cluster"
+
+- name: Ensure installation is complete
+  assert:
+    that:
+      - jira_install.stat.exists
+      - jira_home.stat.exists
+      - jira_start.stat.exists
+      - jira_stop.stat.exists
+      - jira_dbconfig.stat.exists
+      - jira_service_file.stat.exists
+      - jira_pid.stat.exists
+      - jdbc_driver.stat.exists
+      - jira_logs.stat.exists
+      - java_process.rc == 0
+      - jira_service_status.stdout == "active"
+    fail_msg: "Jira installation validation failed."
+
+- name: Jira validation summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "Jira validation completed"
+      - "Install Directory : {{ jira_install_dir }}"
+      - "Home Directory    : {{ jira_home_dir }}"
+      - "HTTP Port         : {{ jira_http_port }}"
+      - "Database          : {{ jira_db_name }}"
+      - "Service           : {{ jira_service_name }}"
+      - "Deployment Mode   : {{ jira_deployment_mode }}"
+      - "========================================"

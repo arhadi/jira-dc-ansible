@@ -1,0 +1,78 @@
+---
+- name: Install required packages
+  ansible.builtin.dnf:
+    name:
+      - java-21-openjdk
+      - rsync
+      - unzip
+      - tar
+      - wget
+      - fontconfig
+    state: present
+
+- name: Discover installed Java executable
+  ansible.builtin.command:
+    cmd: readlink -f /usr/bin/java
+  register: java_binary
+  changed_when: false
+
+- name: Set JAVA_HOME fact
+  ansible.builtin.set_fact:
+    java_home: "{{ java_binary.stdout | dirname | dirname }}"
+
+- name: Verify JAVA_HOME
+  ansible.builtin.command:
+    cmd: "{{ java_home }}/bin/java -version"
+  changed_when: false
+
+- name: Display detected JAVA_HOME
+  ansible.builtin.debug:
+    msg: "Detected JAVA_HOME={{ java_home }}"
+
+- name: Ensure jira group exists
+  ansible.builtin.group:
+    name: "{{ jira_group }}"
+    state: present
+
+- name: Ensure jira user exists
+  ansible.builtin.user:
+    name: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    home: "{{ jira_user_home }}"
+    shell: /bin/bash
+    system: true
+    create_home: true
+
+- name: Ensure /app exists
+  ansible.builtin.file:
+    path: /app
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure Jira installation directory exists
+  ansible.builtin.file:
+    path: "{{ jira_install_dir }}"
+    state: directory
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    mode: "0755"
+
+- name: Ensure Jira home directory exists
+  ansible.builtin.file:
+    path: "{{ jira_home_dir }}"
+    state: directory
+    owner: "{{ jira_owner }}"
+    group: "{{ jira_owner_group }}"
+    mode: "{{ jira_directory_mode }}"
+
+
+- name: Ensure Jira shared directory exists
+  ansible.builtin.file:
+    path: "{{ jira_shared_dir }}"
+    state: directory
+    owner: "{{ jira_owner }}"
+    group: "{{ jira_owner_group }}"
+    mode: "{{ jira_shared_dir_mode }}"
+  when: jira_deployment_mode == "cluster"

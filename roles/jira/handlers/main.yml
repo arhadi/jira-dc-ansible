@@ -1,0 +1,14 @@
+---
+###############################################################################
+# Jira Handlers
+###############################################################################
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart Jira
+  ansible.builtin.systemd:
+    name: "{{ jira_service_name }}"
+    state: restarted
+  when: jira_service_enabled | bool

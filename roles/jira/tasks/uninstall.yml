@@ -1,0 +1,130 @@
+---
+###############################################################################
+# Stop Jira
+###############################################################################
+
+- name: Check if Jira service exists
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ jira_service_name }}.service"
+  register: jira_service
+
+- name: Stop Jira service
+  ansible.builtin.systemd:
+    name: "{{ jira_service_name }}"
+    state: stopped
+  when: jira_service.stat.exists
+  ignore_errors: true
+
+- name: Disable Jira service
+  ansible.builtin.systemd:
+    name: "{{ jira_service_name }}"
+    enabled: false
+  when: jira_service.stat.exists
+  ignore_errors: true
+
+###############################################################################
+# Remove systemd
+###############################################################################
+
+- name: Remove Jira systemd service
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ jira_service_name }}.service"
+    state: absent
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+###############################################################################
+# Remove Installation
+###############################################################################
+
+- name: Remove Jira installation directory
+  ansible.builtin.file:
+    path: "{{ jira_install_dir }}"
+    state: absent
+
+###############################################################################
+# Remove Jira Home
+###############################################################################
+
+- name: Remove Jira Home
+  ansible.builtin.file:
+    path: "{{ jira_home_dir }}"
+    state: absent
+  when: jira_remove_home
+
+###############################################################################
+# Remove Shared Home
+###############################################################################
+
+- name: Remove Jira Shared Home
+  ansible.builtin.file:
+    path: "{{ jira_shared_dir }}"
+    state: absent
+  when:
+    - jira_deployment_mode == "cluster"
+    - jira_remove_shared_home
+
+###############################################################################
+# Remove User
+###############################################################################
+
+- name: Remove Jira user
+  ansible.builtin.user:
+    name: "{{ jira_user }}"
+    state: absent
+    remove: true
+  when: jira_remove_user
+
+###############################################################################
+# Remove Group
+###############################################################################
+
+- name: Remove Jira group
+  ansible.builtin.group:
+    name: "{{ jira_group }}"
+    state: absent
+  when: jira_remove_group
+
+###############################################################################
+# Cleanup
+###############################################################################
+
+- name: Remove temporary installer
+  ansible.builtin.file:
+    path: "/tmp/{{ jira_archive }}"
+    state: absent
+
+###############################################################################
+# Validation
+###############################################################################
+
+- name: Verify Jira installation directory removed
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}"
+  register: jira_install
+
+- name: Verify Jira home removed
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}"
+  register: jira_home
+
+- name: Verify systemd service removed
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ jira_service_name }}.service"
+  register: jira_systemd
+
+- name: Fail if uninstall incomplete
+  ansible.builtin.fail:
+    msg: "Jira uninstall is incomplete."
+  when:
+    - jira_install.stat.exists
+      or jira_home.stat.exists
+      or jira_systemd.stat.exists
+
+- name: Uninstall completed
+  ansible.builtin.debug:
+    msg:
+      - "Jira has been removed successfully."
+      - "Installer archive under files/ has been preserved."

@@ -1,0 +1,36 @@
+[Unit]
+Description={{ jira_display_name }}
+After=network.target
+
+[Service]
+Type=forking
+
+User={{ jira_user }}
+Group={{ jira_group }}
+
+WorkingDirectory={{ jira_install_dir }}
+
+Environment=JAVA_HOME={{ java_home }}
+Environment=JRE_HOME={{ java_home }}
+Environment=JIRA_HOME={{ jira_home_dir }}
+
+PIDFile={{ jira_pid_file }}
+
+ExecStart={{ jira_start_script }}
+ExecStop={{ jira_stop_script }}
+
+TimeoutStartSec={{ jira_start_timeout }}
+TimeoutStopSec={{ jira_stop_timeout }}
+
+LimitNOFILE={{ jira_nofile_limit }}
+LimitNPROC={{ jira_nproc_limit }}
+
+UMask=0027
+
+Restart=on-failure
+RestartSec=10
+
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

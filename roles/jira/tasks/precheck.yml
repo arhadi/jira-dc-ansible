@@ -1,0 +1,141 @@
+---
+- name: Verify RHEL 9
+  assert:
+    that:
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "9"
+    fail_msg: "Only RHEL 9 is supported."
+
+- name: Show playbook directory
+  debug:
+    var: playbook_dir
+
+- name: Show Jira variables
+  debug:
+    msg:
+      - "jira_version={{ jira_version }}"
+      - "jira_archive={{ jira_archive }}"
+
+- name: Check Jira installer archive
+  stat:
+    path: "{{ playbook_dir }}/../files/{{ jira_archive }}"
+  delegate_to: localhost
+  register: archive_file
+
+- fail:
+    msg: "Jira archive not found."
+  when: not archive_file.stat.exists
+
+- name: Check Jira user
+  ansible.builtin.command:
+    cmd: "id {{ jira_user }}"
+  register: jira_user_result
+  changed_when: false
+  failed_when: false
+
+- name: Report Jira user
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        '✓ Jira user exists'
+        if jira_user_result.rc == 0
+        else '⚠ Jira user does not exist (will be created)'
+      }}
+
+- name: Check Jira group
+  ansible.builtin.command:
+    cmd: "getent group {{ jira_group }}"
+  register: jira_group_result
+  changed_when: false
+  failed_when: false
+
+- name: Report Jira group
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        '✓ Jira group exists'
+        if jira_group_result.rc == 0
+        else '⚠ Jira group does not exist (will be created)'
+      }}
+
+- name: Check installation directory
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}"
+  register: install_dir
+
+- name: Report installation directory
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        '✓ Installation directory exists'
+        if install_dir.stat.exists
+        else '⚠ Installation directory does not exist (will be created)'
+      }}
+
+- name: Check Jira home directory
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}"
+  register: jira_home_stat
+
+- name: Report Jira home directory
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        '✓ Jira home directory exists'
+        if jira_home_stat.stat.exists
+        else '⚠ Jira home directory does not exist (will be created)'
+      }}
+
+- name: Check Java
+  ansible.builtin.command: java -version
+  register: java_version
+  changed_when: false
+  failed_when: false
+
+- name: Report Java
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        '✓ Java is installed'
+        if java_version.rc == 0
+        else '⚠ Java is not installed (will be installed)'
+      }}
+
+- name: Check PostgreSQL connectivity
+  ansible.builtin.wait_for:
+    host: "{{ jira_db_host }}"
+    port: "{{ jira_db_port }}"
+    timeout: 5
+  register: postgres_check
+  failed_when: false
+  changed_when: false
+
+- name: Report PostgreSQL connectivity
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        '✓ PostgreSQL is reachable'
+        if postgres_check.failed is not defined or not postgres_check.failed
+        else '✗ PostgreSQL is NOT reachable'
+      }}
+
+- name: Check free disk space on /app
+  ansible.builtin.command:
+    cmd: "df -BG /app"
+  register: app_disk
+  changed_when: false
+
+- name: Show disk information
+  ansible.builtin.debug:
+    var: app_disk.stdout_lines
+
+- name: Extract free disk space
+  ansible.builtin.set_fact:
+    app_free_gb: "{{ app_disk.stdout_lines[1].split()[3] | regex_replace('G','') }}"
+
+- name: Verify minimum free disk space
+  ansible.builtin.assert:
+    that:
+      - (app_free_gb | int) >= 10
+    fail_msg: "/app requires at least 10 GB of free space."
+    success_msg: "/app has {{ app_free_gb }} GB free."

@@ -1,0 +1,29 @@
+---
+###############################################################################
+# Jira Data Center
+###############################################################################
+
+- import_tasks: precheck.yml
+  tags:
+    - always
+    - precheck
+
+- import_tasks: prerequisites.yml
+  tags:
+    - prerequisites
+
+- import_tasks: install.yml
+  tags:
+    - install
+
+- import_tasks: configure.yml
+  tags:
+    - configure
+
+- import_tasks: systemd.yml
+  tags:
+    - systemd
+
+- import_tasks: validate.yml
+  tags:
+    - validate

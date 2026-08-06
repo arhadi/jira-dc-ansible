@@ -1,0 +1,20 @@
+---
+###############################################################################
+# Jira Defaults
+###############################################################################
+
+jira_service_enabled: true
+jira_service_started: true
+
+jira_context_path: ""
+
+jira_deployment_mode: cluster
+
+jira_start_timeout: 300
+jira_stop_timeout: 300
+
+jira_remove_install_dir: true
+jira_remove_home: true
+jira_remove_shared_home: true
+jira_remove_user: true
+jira_remove_group: true

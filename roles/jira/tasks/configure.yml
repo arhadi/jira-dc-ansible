@@ -1,0 +1,125 @@
+---
+##########################################################################
+# Directories
+##########################################################################
+
+- name: Create Jira Home directory
+  ansible.builtin.file:
+    path: "{{ jira_home_dir }}"
+    state: directory
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    mode: "{{ jira_directory_mode }}"
+
+- name: Create Jira Shared Home directory
+  ansible.builtin.file:
+    path: "{{ jira_shared_dir }}"
+    state: directory
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    mode: "{{ jira_shared_dir_mode }}"
+  when: jira_deployment_mode == "cluster"
+
+##########################################################################
+# Configuration Files
+##########################################################################
+
+- name: Configure Jira JVM settings
+  ansible.builtin.replace:
+    path: "{{ jira_install_dir }}/bin/setenv.sh"
+    regexp: '^JVM_MINIMUM_MEMORY=".*"$'
+    replace: 'JVM_MINIMUM_MEMORY="{{ jira_jvm_min_heap }}"'
+
+- name: Configure Jira maximum heap
+  ansible.builtin.replace:
+    path: "{{ jira_install_dir }}/bin/setenv.sh"
+    regexp: '^JVM_MAXIMUM_MEMORY=".*"$'
+    replace: 'JVM_MAXIMUM_MEMORY="{{ jira_jvm_max_heap }}"'
+
+- name: Configure JVM code cache
+  ansible.builtin.replace:
+    path: "{{ jira_install_dir }}/bin/setenv.sh"
+    regexp: "^JVM_CODE_CACHE_ARGS=.*$"
+    replace: 'JVM_CODE_CACHE_ARGS="-XX:InitialCodeCacheSize=32m -XX:ReservedCodeCacheSize={{ jira_jvm_code_cache }}"'
+
+- name: Deploy jira-application.properties
+  ansible.builtin.template:
+    src: jira-application.properties.j2
+    dest: "{{ jira_install_dir }}/atlassian-jira/WEB-INF/classes/jira-application.properties"
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    mode: "0644"
+  notify: Restart Jira
+
+- name: Deploy dbconfig.xml
+  ansible.builtin.template:
+    src: dbconfig.xml.j2
+    dest: "{{ jira_home_dir }}/dbconfig.xml"
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    mode: "0640"
+  notify: Restart Jira
+
+- name: Deploy cluster.properties
+  ansible.builtin.template:
+    src: cluster.properties.j2
+    dest: "{{ jira_home_dir }}/cluster.properties"
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    mode: "0644"
+  when: jira_deployment_mode == "cluster"
+  notify: Restart Jira
+
+##########################################################################
+# Configure Tomcat HTTP Port
+##########################################################################
+
+- name: Configure Jira HTTP connector
+  ansible.builtin.replace:
+    path: "{{ jira_install_dir }}/conf/server.xml"
+    regexp: '<Connector port="8080"'
+    replace: '<Connector port="{{ jira_http_port }}"'
+  notify: Restart Jira
+
+##########################################################################
+# Validation
+##########################################################################
+
+- name: Verify jira-application.properties
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}/atlassian-jira/WEB-INF/classes/jira-application.properties"
+  register: jira_properties
+
+- name: Verify dbconfig.xml
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}/dbconfig.xml"
+  register: jira_dbconfig
+
+- name: Verify server.xml
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}/conf/server.xml"
+  register: jira_serverxml
+
+- name: Verify cluster.properties
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}/cluster.properties"
+  register: jira_cluster
+  when: jira_deployment_mode == "cluster"
+
+- name: Validate configuration
+  ansible.builtin.assert:
+    that:
+      - jira_properties.stat.exists
+      - jira_dbconfig.stat.exists
+      - jira_serverxml.stat.exists
+      - jira_home_dir is defined
+      - jira_install_dir is defined
+      - jira_shared_dir is defined or jira_deployment_mode != "cluster"
+      - jira_cluster.stat.exists or jira_deployment_mode != "cluster"
+    fail_msg: |
+      Jira configuration validation failed.
+
+      jira-application.properties : {{ jira_properties.stat.exists | default(false) }}
+      dbconfig.xml                : {{ jira_dbconfig.stat.exists | default(false) }}
+      server.xml                  : {{ jira_serverxml.stat.exists | default(false) }}
+      cluster.properties          : {{ jira_cluster.stat.exists | default(false) if jira_deployment_mode == 'cluster' else 'N/A' }}

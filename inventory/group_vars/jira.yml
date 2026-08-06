@@ -1,0 +1,154 @@
+# ==========================================================
+# Jira Installation
+# ==========================================================
+jira_version: "11.3.8"
+
+jira_archive: "atlassian-jira-software-{{ jira_version }}.tar.gz"
+
+jira_extract_dir: "atlassian-jira-software-{{ jira_version }}-standalone"
+
+jira_install_dir: "/app/jira-{{ jira_version }}"
+
+jira_home_dir: "/app/jira-data"
+
+jira_shared_dir: "/shared/jira"
+
+jira_user: "jira"
+
+jira_group: "jira"
+
+jira_user_home: "/home/jira"
+
+jira_tmp_dir: "/tmp"
+
+jira_file_mode: "0644"
+
+jira_directory_mode: "0755"
+
+jira_shared_dir_mode: "0775"
+
+jira_owner: "{{ jira_user }}"
+
+jira_owner_group: "{{ jira_group }}"
+
+jira_nofile_limit: 65535
+
+jira_nproc_limit: 8192
+
+# ==========================================================
+# Validation
+# ==========================================================
+jira_healthcheck_url: "http://localhost:{{ jira_http_port }}{{ jira_context_path }}/status"
+
+jira_start_wait: 300
+
+jira_start_delay: 10
+
+# ==========================================================
+# Jira
+# ==========================================================
+jira_product: "jira-software"
+jira_display_name: "Atlassian Jira Data Center"
+
+jira_http_port: 8008
+jira_https_port: 8443
+jira_context_path: ""
+
+jira_deployment_mode: "cluster"      # cluster | standalone
+
+jira_proxy_enabled: false
+
+jira_proxy_name: jira.company.com
+
+jira_proxy_port: 443
+
+jira_proxy_scheme: https
+
+# ==========================================================
+# JVM
+# ==========================================================
+java_home: "/usr/lib/jvm/java-21-openjdk-21.0.12.0.8-1.2.el9.x86_64"
+jira_jvm_min_heap: "2g"
+jira_jvm_max_heap: "4g"
+jira_jvm_code_cache: "512m"
+
+jira_gc: "G1GC"
+
+jira_jvm_args: >
+  -Djava.awt.headless=true
+  -Dfile.encoding=UTF-8
+  -Djira.home={{ jira_home_dir }}
+
+##########################################################
+# Database
+##########################################################
+
+jira_database_type: postgres72
+
+jira_db_host: "localhost"
+jira_db_port: 15432
+
+jira_db_name: "jira"
+jira_db_username: "jira"
+jira_db_password: "jira"
+
+jira_jdbc_url: "jdbc:postgresql://{{ jira_db_host }}:{{ jira_db_port }}/{{ jira_db_name }}"
+
+
+##########################################################
+# PostgreSQL JDBC Driver
+##########################################################
+
+jira_db_driver: "org.postgresql.Driver"
+
+jira_db_jdbc_version: "42.7.11"
+
+jira_db_jdbc_jar: "postgresql-{{ jira_db_jdbc_version }}.jar"
+
+# ==========================================================
+# Jira Data Center
+# ==========================================================
+jira_node_id: "jira-node01"
+
+jira_cluster_name: "jira-dc"
+
+jira_ehcache_listener_port: 40001
+
+jira_ehcache_object_port: 40011
+
+# ==========================================================
+# Service
+# ==========================================================
+jira_service_name: "jira"
+
+jira_pid_file: "{{ jira_install_dir }}/work/catalina.pid"
+
+jira_log_dir: "{{ jira_install_dir }}/logs"
+
+jira_start_timeout: 300
+
+jira_stop_timeout: 300
+
+jira_start_script: "{{ jira_install_dir }}/bin/start-jira.sh"
+
+jira_stop_script: "{{ jira_install_dir }}/bin/stop-jira.sh"
+
+jira_service_enabled: true
+
+jira_service_started: false
+
+# ==========================================================
+# Uninstall
+# ==========================================================
+
+jira_remove_home: true
+
+jira_remove_shared_home: true
+
+jira_remove_install_dir: true
+
+jira_remove_user: true
+
+jira_remove_group: true
+
+jira_remove_database: false

@@ -1,0 +1,102 @@
+---
+##########################################################################
+# Validate Installation
+##########################################################################
+
+- name: Verify Jira start script
+  ansible.builtin.stat:
+    path: "{{ jira_start_script }}"
+  register: jira_start
+
+- name: Verify Jira stop script
+  ansible.builtin.stat:
+    path: "{{ jira_stop_script }}"
+  register: jira_stop
+
+- name: Validate Jira installation
+  ansible.builtin.assert:
+    that:
+      - jira_start.stat.exists
+      - jira_stop.stat.exists
+    fail_msg: |
+      Jira installation is incomplete.
+
+      Start Script : {{ jira_start_script }}
+      Exists       : {{ jira_start.stat.exists | default(false) }}
+
+      Stop Script  : {{ jira_stop_script }}
+      Exists       : {{ jira_stop.stat.exists | default(false) }}
+
+##########################################################################
+# Install systemd Unit
+##########################################################################
+
+- name: Deploy Jira systemd service
+  ansible.builtin.template:
+    src: jira.service.j2
+    dest: "/etc/systemd/system/{{ jira_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart Jira
+
+##########################################################################
+# Enable Service
+##########################################################################
+
+- name: Enable Jira service
+  ansible.builtin.systemd:
+    name: "{{ jira_service_name }}"
+    enabled: "{{ jira_service_enabled }}"
+
+##########################################################################
+# Start Service
+##########################################################################
+
+- name: Start Jira service
+  ansible.builtin.systemd:
+    name: "{{ jira_service_name }}"
+    state: started
+  when: jira_service_started
+
+##########################################################################
+# Wait for PID
+##########################################################################
+
+- name: Wait for Jira PID file
+  ansible.builtin.wait_for:
+    path: "{{ jira_pid_file }}"
+    timeout: "{{ jira_start_timeout }}"
+  when: jira_service_started
+
+##########################################################################
+# Verify Service
+##########################################################################
+
+- name: Check Jira service status
+  ansible.builtin.command:
+    cmd: systemctl is-active {{ jira_service_name }}
+  register: jira_service_status
+  changed_when: false
+  failed_when: jira_service_status.stdout != "active"
+  when: jira_service_started
+
+- name: Check Jira service enabled
+  ansible.builtin.command:
+    cmd: systemctl is-enabled {{ jira_service_name }}
+  register: jira_service_enabled_status
+  changed_when: false
+
+##########################################################################
+# Summary
+##########################################################################
+
+- name: Display systemd summary
+  ansible.builtin.debug:
+    msg:
+      - "Service      : {{ jira_service_name }}"
+      - "Enabled      : {{ jira_service_enabled_status.stdout }}"
+      - "Active       : {{ jira_service_status.stdout if jira_service_started else 'Not Started' }}"
+      - "PID File     : {{ jira_pid_file }}"

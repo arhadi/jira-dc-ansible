@@ -1,0 +1,20 @@
+#!/bin/bash
+
+export JAVA_HOME="{{ java_home }}"
+export JRE_HOME="{{ java_home }}"
+
+JVM_MINIMUM_MEMORY="{{ jira_jvm_min_heap }}"
+JVM_MAXIMUM_MEMORY="{{ jira_jvm_max_heap }}"
+
+JVM_SUPPORT_RECOMMENDED_ARGS="\
+{{ jira_jvm_args }} \
+-Djdk.tls.ephemeralDHKeySize=2048 \
+-XX:+Use{{ jira_gc }} \
+-XX:+ExplicitGCInvokesConcurrent \
+-XX:MaxGCPauseMillis=200 \
+-XX:ReservedCodeCacheSize={{ jira_jvm_code_cache }} \
+"
+
+export JVM_MINIMUM_MEMORY
+export JVM_MAXIMUM_MEMORY
+export JVM_SUPPORT_RECOMMENDED_ARGS
