@@ -93,7 +93,7 @@
 
 - name: Remove temporary installer
   ansible.builtin.file:
-    path: "/tmp/{{ jira_archive }}"
+    path: "{{ jira_temp_dir }}/{{ jira_archive }}"
     state: absent
 
 ###############################################################################

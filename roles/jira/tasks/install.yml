@@ -1,33 +1,53 @@
 ---
+###############################################################################
+# Jira Installation
+###############################################################################
+
+###############################################################################
+# Verify Installer on Ansible Controller
+###############################################################################
+
 - name: Verify Jira installer exists
   ansible.builtin.stat:
-    path: "{{ playbook_dir }}/../files/{{ jira_archive }}"
+    path: "{{ role_path }}/files/{{ jira_archive }}"
   delegate_to: localhost
   register: jira_installer
 
 - name: Fail if Jira installer is missing
   ansible.builtin.fail:
-    msg: "Installer not found: {{ playbook_dir }}/../files/{{ jira_archive }}"
+    msg: "Installer not found: {{ role_path }}/files/{{ jira_archive }}"
   when: not jira_installer.stat.exists
 
-- name: Copy Jira installer to target
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../files/{{ jira_archive }}"
-    dest: "/tmp/{{ jira_archive }}"
-    mode: "0644"
+###############################################################################
+# Verify Existing Installation
+###############################################################################
 
-##########################################################################
-# Check existing installation
-##########################################################################
-
-- name: Check if Jira installation exists
+- name: Check if Jira is already installed
   ansible.builtin.stat:
     path: "{{ jira_install_dir }}/bin/start-jira.sh"
   register: jira_installation
 
-##########################################################################
-# Remove incomplete installation automatically
-##########################################################################
+###############################################################################
+# Prepare Temporary Staging Area
+###############################################################################
+
+- name: Ensure temporary staging directory exists
+  ansible.builtin.file:
+    path: "{{ jira_temp_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copy Jira installer to target
+  ansible.builtin.copy:
+    src: "{{ jira_archive }}"
+    dest: "{{ jira_temp_dir }}/{{ jira_archive }}"
+    mode: "0644"
+  when: not jira_installation.stat.exists
+
+
+###############################################################################
+# Remove Incomplete Installation
+###############################################################################
 
 - name: Check installation directory
   ansible.builtin.stat:
@@ -42,38 +62,38 @@
     - jira_install_dir_stat.stat.exists
     - not jira_installation.stat.exists
 
-##########################################################################
-# Remove extracted source if it already exists
-##########################################################################
+###############################################################################
+# Remove Previous Extracted Source
+###############################################################################
 
 - name: Remove previously extracted installer directory
   ansible.builtin.file:
-    path: "/app/{{ jira_extract_dir }}"
+    path: "{{ jira_install_dir | dirname }}/{{ jira_extract_dir }}"
     state: absent
   when: not jira_installation.stat.exists
 
-##########################################################################
-# Extract Jira
-##########################################################################
+###############################################################################
+# Extract Jira Software
+###############################################################################
 
 - name: Extract Jira archive
   ansible.builtin.unarchive:
-    src: "/tmp/{{ jira_archive }}"
-    dest: "/app"
+    src: "{{ jira_temp_dir }}/{{ jira_archive }}"
+    dest: "{{ jira_install_dir | dirname }}"
     remote_src: true
     owner: "{{ jira_user }}"
     group: "{{ jira_group }}"
   when: not jira_installation.stat.exists
 
-##########################################################################
-# Rename installation directory
-##########################################################################
+###############################################################################
+# Rename Installation Directory
+###############################################################################
 
 - name: Rename extracted Jira directory
   ansible.builtin.command:
     cmd: >
       mv
-      /app/{{ jira_extract_dir }}
+      {{ jira_install_dir | dirname }}/{{ jira_extract_dir }}
       {{ jira_install_dir }}
   args:
     creates: "{{ jira_install_dir }}"
@@ -81,9 +101,9 @@
     - not jira_installation.stat.exists
     - jira_extract_dir != (jira_install_dir | basename)
 
-##########################################################################
-# Ownership
-##########################################################################
+###############################################################################
+# Ensure Installation Ownership
+###############################################################################
 
 - name: Ensure Jira installation ownership
   ansible.builtin.file:
@@ -92,9 +112,9 @@
     group: "{{ jira_group }}"
     recurse: true
 
-##########################################################################
-# Validate installation
-##########################################################################
+###############################################################################
+# Validate Installation
+###############################################################################
 
 - name: Verify Jira startup script
   ansible.builtin.stat:
@@ -126,11 +146,27 @@
       start-jira.sh     : {{ jira_install_verify.stat.exists | default(false) }}
       stop-jira.sh      : {{ jira_stop_verify.stat.exists | default(false) }}
 
-##########################################################################
-# Cleanup
-##########################################################################
+###############################################################################
+# Cleanup Temporary Files
+###############################################################################
 
 - name: Remove temporary installer archive
   ansible.builtin.file:
-    path: "/tmp/{{ jira_archive }}"
+    path: "{{ jira_temp_dir }}/{{ jira_archive }}"
     state: absent
+
+###############################################################################
+# Installation Summary
+###############################################################################
+
+- name: Display installation summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "Jira installation completed"
+      - "Version        : {{ jira_version }}"
+      - "Install Dir    : {{ jira_install_dir }}"
+      - "Home Dir       : {{ jira_home_dir }}"
+      - "Temp Directory : {{ jira_temp_dir }}"
+      - "Archive        : {{ jira_archive }}"
+      - "========================================"

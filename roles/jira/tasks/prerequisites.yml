@@ -63,8 +63,8 @@
   ansible.builtin.file:
     path: "{{ jira_home_dir }}"
     state: directory
-    owner: "{{ jira_owner }}"
-    group: "{{ jira_owner_group }}"
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
     mode: "{{ jira_directory_mode }}"
 
 
@@ -72,7 +72,7 @@
   ansible.builtin.file:
     path: "{{ jira_shared_dir }}"
     state: directory
-    owner: "{{ jira_owner }}"
-    group: "{{ jira_owner_group }}"
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
     mode: "{{ jira_shared_dir_mode }}"
   when: jira_deployment_mode == "cluster"

@@ -41,8 +41,10 @@ stages are reached via `--tags` against `install_jira.yml` (see
 ## Directory Structure
 
 ```
-jira-dc-ansible
+jira-dc-ansible/
 ├── ansible.cfg
+├── files
+│   └── atlassian-jira-software-11.3.8.tar.gz   # Jira installer (you provide this)
 ├── inventory
 │   ├── group_vars
 │   │   └── jira.yml
@@ -50,32 +52,31 @@ jira-dc-ansible
 ├── playbooks
 │   ├── install_jira.yml
 │   └── uninstall_jira.yml
-└── roles
-    └── jira
-        ├── defaults
-        │   └── main.yml
-        ├── files
-        │   └── atlassian-jira-software-11.3.8.tar.gz
-        ├── handlers
-        │   └── main.yml
-        ├── meta
-        │   └── main.yml
-        ├── tasks
-        │   ├── configure.yml
-        │   ├── install.yml
-        │   ├── main.yml
-        │   ├── precheck.yml
-        │   ├── prerequisites.yml
-        │   ├── systemd.yml
-        │   ├── uninstall.yml
-        │   └── validate.yml
-        └── templates
-            ├── cluster.properties.j2
-            ├── dbconfig.xml.j2
-            ├── jira-application.properties.j2
-            ├── jira.service.j2
-            ├── server.xml.j2
-            └── setenv.sh.j2
+├── roles
+│   └── jira
+│       ├── defaults
+│       │   └── main.yml
+│       ├── files
+│       ├── handlers
+│       │   └── main.yml
+│       ├── tasks
+│       │   ├── configure.yml
+│       │   ├── install.yml
+│       │   ├── main.yml
+│       │   ├── precheck.yml
+│       │   ├── prerequisites.yml
+│       │   ├── systemd.yml
+│       │   ├── uninstall.yml
+│       │   └── validate.yml
+│       └── templates
+│           ├── cluster.properties.j2
+│           ├── dbconfig.xml.j2
+│           ├── jira-application.properties.j2
+│           ├── jira.service.j2
+│           ├── server.xml.j2
+│           └── setenv.sh.j2
+├── templates
+└── vars
 ```
 
 ## Requirements
@@ -347,5 +348,3 @@ relying on this automation in production:
   under `{{ jira_install_dir }}/logs` show a completed startup.
 - **Verbose output**: add `-vvv` to any `ansible-playbook` command for
   detailed task-level debugging.
-#   j i r a - d c - a n s i b l e  
- 

@@ -16,15 +16,41 @@
       - "jira_version={{ jira_version }}"
       - "jira_archive={{ jira_archive }}"
 
-- name: Check Jira installer archive
-  stat:
-    path: "{{ playbook_dir }}/../files/{{ jira_archive }}"
-  delegate_to: localhost
-  register: archive_file
+###############################################################################
+# Verify Jira Installer
+###############################################################################
 
-- fail:
-    msg: "Jira archive not found."
-  when: not archive_file.stat.exists
+- name: Check Jira installer archive
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ jira_archive }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  register: jira_archive_stat
+
+- name: Verify Jira installer exists
+  ansible.builtin.assert:
+    that:
+      - jira_archive_stat.stat.exists
+    fail_msg: |
+      Jira installer not found.
+
+      Expected:
+      {{ role_path }}/files/{{ jira_archive }}
+
+- name: Verify Jira installer SHA256 checksum
+  ansible.builtin.assert:
+    that:
+      - jira_archive_stat.stat.checksum == jira_archive_sha256
+    fail_msg: |
+      Jira installer checksum verification failed.
+
+      Expected:
+      {{ jira_archive_sha256 }}
+
+      Actual:
+      {{ jira_archive_stat.stat.checksum }}
+    success_msg: |
+      Jira installer checksum verified successfully.
 
 - name: Check Jira user
   ansible.builtin.command:
@@ -37,9 +63,9 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        '✓ Jira user exists'
+        'Jira user exists'
         if jira_user_result.rc == 0
-        else '⚠ Jira user does not exist (will be created)'
+        else 'Jira user does not exist (will be created)'
       }}
 
 - name: Check Jira group
@@ -53,9 +79,9 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        '✓ Jira group exists'
+        'Jira group exists'
         if jira_group_result.rc == 0
-        else '⚠ Jira group does not exist (will be created)'
+        else 'Jira group does not exist (will be created)'
       }}
 
 - name: Check installation directory
@@ -67,9 +93,9 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        '✓ Installation directory exists'
+        'Installation directory exists'
         if install_dir.stat.exists
-        else '⚠ Installation directory does not exist (will be created)'
+        else 'Installation directory does not exist (will be created)'
       }}
 
 - name: Check Jira home directory
@@ -81,9 +107,9 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        '✓ Jira home directory exists'
+        'Jira home directory exists'
         if jira_home_stat.stat.exists
-        else '⚠ Jira home directory does not exist (will be created)'
+        else 'Jira home directory does not exist (will be created)'
       }}
 
 - name: Check Java
@@ -96,9 +122,9 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        '✓ Java is installed'
+        'Java is installed'
         if java_version.rc == 0
-        else '⚠ Java is not installed (will be installed)'
+        else 'Java is not installed (will be installed)'
       }}
 
 - name: Check PostgreSQL connectivity
@@ -114,9 +140,9 @@
   ansible.builtin.debug:
     msg: >-
       {{
-        '✓ PostgreSQL is reachable'
+        'PostgreSQL is reachable'
         if postgres_check.failed is not defined or not postgres_check.failed
-        else '✗ PostgreSQL is NOT reachable'
+        else 'PostgreSQL is NOT reachable'
       }}
 
 - name: Check free disk space on /app
@@ -137,5 +163,6 @@
   ansible.builtin.assert:
     that:
       - (app_free_gb | int) >= 10
-    fail_msg: "/app requires at least 10 GB of free space."
-    success_msg: "/app has {{ app_free_gb }} GB free."
+    fail_msg: "{{ jira_base_dir }} requires at least 10 GB of free space."
+    success_msg: "{{ jira_base_dir }} has {{ app_free_gb }} GB free."
+
