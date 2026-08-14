@@ -20,9 +20,9 @@
   register: jdbc_driver
 
 
-###############################################################################
+# ------------------------------------------------------------
 # Jira Home
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify Jira home directory
   ansible.builtin.stat:
@@ -40,9 +40,9 @@
   register: jira_cluster
   when: jira_deployment_mode == "cluster"
 
-###############################################################################
+# ------------------------------------------------------------
 # Shared Home
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify Jira shared home
   ansible.builtin.stat:
@@ -58,9 +58,9 @@
     fail_msg: "Jira shared home {{ jira_shared_dir }} does not exist."
   when: jira_deployment_mode == "cluster"
 
-###############################################################################
+# ------------------------------------------------------------
 # Service
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Verify systemd service file
   ansible.builtin.stat:
@@ -80,9 +80,9 @@
       - jira_service_status.stdout == "active"
     fail_msg: "Jira service is not running."
 
-###############################################################################
+# ------------------------------------------------------------
 # Process
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Check Java process
   ansible.builtin.shell: >
@@ -102,9 +102,9 @@
     path: "{{ jira_pid_file }}"
   register: jira_pid
 
-###############################################################################
+# ------------------------------------------------------------
 # HTTP Validation
-###############################################################################
+# ------------------------------------------------------------
 
 - name: Wait for Jira HTTP port
   ansible.builtin.wait_for:
@@ -192,6 +192,10 @@
       - jira_service_status.stdout == "active"
     fail_msg: "Jira installation validation failed."
 
+# ------------------------------------------------------------
+# Summary
+# ------------------------------------------------------------
+
 - name: Jira validation summary
   ansible.builtin.debug:
     msg:
@@ -204,47 +208,5 @@
       - "Service           : {{ jira_service_name }}"
       - "Deployment Mode   : {{ jira_deployment_mode }}"
       - "========================================"
-
-###############################################################################
-# Installation Summary
-###############################################################################
-
-- name: Display Next Steps
-  debug:
-    msg:
-      - ""
-      - "======================================================="
-      - "Jira Data Center installation completed successfully"
-      - "======================================================="
-      - ""
-      - "Installation Details"
-      - "--------------------"
-      - "Version            : {{ jira_version }}"
-      - "Install Directory  : {{ jira_install_dir }}"
-      - "Home Directory     : {{ jira_home }}"
-      - "Service            : {{ jira_service_name }}"
-      - "HTTP Port          : {{ jira_http_port }}"
-      - "Database           : {{ postgres_database }}"
-      - "Java Home          : {{ java_home }}"
-      - "Cluster Enabled    : {{ jira_clustered }}"
-      - ""
-      - "Next Steps"
-      - "----------"
-      - "1. Open your browser"
-      - "2. Complete the Jira Setup Wizard"
-      - "3. Apply your Jira Data Center license"
-      - "4. Create the administrator account"
-      - "5. Configure SMTP, Backup and Indexing"
-      - "6. Verify all application health checks"
-      - ""
-      - "Access URL"
-      - "----------"
-      - "http://{{ ansible_default_ipv4.address | default(inventory_hostname) }}:{{ jira_http_port }}"
-      - ""
-      - "Useful Commands"
-      - "---------------"
-      - "systemctl status {{ jira_service_name }}"
-      - "systemctl restart {{ jira_service_name }}"
-      - "journalctl -u {{ jira_service_name }} -f"
-      - ""
-      - "======================================================="
+      - "Next: Complete setup at http://{{ ansible_default_ipv4.address | default(inventory_hostname) }}:{{ jira_http_port }}"
+      - "Complete the Jira Setup Wizard and apply the Data Center license."
