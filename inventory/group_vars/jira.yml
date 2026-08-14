@@ -12,8 +12,22 @@ jira_display_name: "Atlassian Jira Data Center"
 
 jira_version: "11.3.8"
 
+# Supported installation methods:
+#   archive
+#   installer
+jira_install_method: "installer"
+
+# Archive installer
 jira_archive: "atlassian-jira-software-{{ jira_version }}.tar.gz"
 jira_archive_sha256: "ec7cac96e9df2e732af5ab3ad00bdaed82aeb8d153de87fd049f23fb775bfba5"
+
+# Linux binary installer
+jira_installer: "atlassian-jira-software-{{ jira_version }}-x64.bin"
+
+# Optional SHA256 checksum.
+# Populate after downloading the official installer.
+jira_installer_sha256: "369137f5b170684e010526b8da43bfbbb71aaf3c1a54184059e5f61b2d07860b"
+
 
 # ------------------------------------------------------------
 # Directories
@@ -76,6 +90,7 @@ jira_jvm_args: >
 
 jira_http_port: 8008
 jira_https_port: 8443
+jira_control_port: 8005
 jira_context_path: ""
 
 # ------------------------------------------------------------

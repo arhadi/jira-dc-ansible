@@ -1,29 +1,67 @@
 ---
 # ------------------------------------------------------------
-# Stop Jira
+# Jira Data Center Uninstall
+#
+# Supports installations created using:
+#   - archive (.tar.gz)
+#   - Linux binary installer (.bin)
+#
+# Jira uninstall lifecycle is managed entirely by Ansible.
+# The Atlassian Install4j uninstaller is intentionally not used.
 # ------------------------------------------------------------
 
-- name: Check if Jira service exists
+# ------------------------------------------------------------
+# Display Uninstall Plan
+# ------------------------------------------------------------
+
+- name: Display Jira uninstall plan
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "Jira Data Center Uninstall"
+      - "Version      : {{ jira_version }}"
+      - "Method       : {{ jira_install_method | default('unknown') }}"
+      - "Install Dir  : {{ jira_install_dir }}"
+      - "Home Dir     : {{ jira_home_dir }}"
+      - "Shared Home  : {{ jira_shared_dir }}"
+      - "Service      : {{ jira_service_name }}"
+      - "Remove Install Dir : {{ jira_remove_install_dir | bool }}"
+      - "Remove Home        : {{ jira_remove_home | bool }}"
+      - "Remove Shared Home : {{ jira_remove_shared_home | bool }}"
+      - "Remove User        : {{ jira_remove_user | bool }}"
+      - "Remove Group       : {{ jira_remove_group | bool }}"
+      - "Remove Database    : {{ jira_remove_database | default(false) | bool }}"
+      - "========================================"
+
+# ------------------------------------------------------------
+# Detect Jira Service
+# ------------------------------------------------------------
+
+- name: Check if Jira systemd service exists
   ansible.builtin.stat:
     path: "/etc/systemd/system/{{ jira_service_name }}.service"
-  register: jira_service
+  register: jira_service_file
+
+# ------------------------------------------------------------
+# Stop Jira
+# ------------------------------------------------------------
 
 - name: Stop Jira service
   ansible.builtin.systemd:
     name: "{{ jira_service_name }}"
     state: stopped
-  when: jira_service.stat.exists
-  ignore_errors: true
+  when: jira_service_file.stat.exists
+  failed_when: false
 
 - name: Disable Jira service
   ansible.builtin.systemd:
     name: "{{ jira_service_name }}"
     enabled: false
-  when: jira_service.stat.exists
-  ignore_errors: true
+  when: jira_service_file.stat.exists
+  failed_when: false
 
 # ------------------------------------------------------------
-# Remove systemd
+# Remove systemd Service
 # ------------------------------------------------------------
 
 - name: Remove Jira systemd service
@@ -31,18 +69,53 @@
     path: "/etc/systemd/system/{{ jira_service_name }}.service"
     state: absent
 
-- name: Reload systemd
+- name: Reload systemd daemon
   ansible.builtin.systemd:
     daemon_reload: true
 
+- name: Reset Jira systemd failed state
+  ansible.builtin.command:
+    cmd: "systemctl reset-failed {{ jira_service_name }}"
+  changed_when: false
+  failed_when: false
+
+# ------------------------------------------------------------
+# Verify Jira Process Stopped
+# ------------------------------------------------------------
+
+- name: Check for remaining Jira processes
+  ansible.builtin.shell: |
+    set -o pipefail
+    ps -eo pid,user,args | grep '[j]ava' | grep '{{ jira_install_dir }}' || true
+  args:
+    executable: /bin/bash
+  register: jira_remaining_process
+  changed_when: false
+
+- name: Verify Jira process is stopped
+  ansible.builtin.assert:
+    that:
+      - jira_remaining_process.stdout | trim | length == 0
+    fail_msg: |
+      Jira process is still running.
+
+      {{ jira_remaining_process.stdout }}
+
+      Installation removal has been stopped for safety.
+
 # ------------------------------------------------------------
 # Remove Installation
+#
+# For .bin installations this also removes:
+#   {{ jira_install_dir }}/.install4j
+# and the Install4j uninstaller.
 # ------------------------------------------------------------
 
 - name: Remove Jira installation directory
   ansible.builtin.file:
     path: "{{ jira_install_dir }}"
     state: absent
+  when: jira_remove_install_dir | bool
 
 # ------------------------------------------------------------
 # Remove Jira Home
@@ -52,7 +125,7 @@
   ansible.builtin.file:
     path: "{{ jira_home_dir }}"
     state: absent
-  when: jira_remove_home
+  when: jira_remove_home | bool
 
 # ------------------------------------------------------------
 # Remove Shared Home
@@ -64,10 +137,10 @@
     state: absent
   when:
     - jira_deployment_mode == "cluster"
-    - jira_remove_shared_home
+    - jira_remove_shared_home | bool
 
 # ------------------------------------------------------------
-# Remove User
+# Remove Jira User
 # ------------------------------------------------------------
 
 - name: Remove Jira user
@@ -75,73 +148,177 @@
     name: "{{ jira_user }}"
     state: absent
     remove: true
-  when: jira_remove_user
+  when: jira_remove_user | bool
 
 # ------------------------------------------------------------
-# Remove Group
+# Remove Jira Group
 # ------------------------------------------------------------
 
 - name: Remove Jira group
   ansible.builtin.group:
     name: "{{ jira_group }}"
     state: absent
-  when: jira_remove_group
+  when: jira_remove_group | bool
 
 # ------------------------------------------------------------
-# Cleanup
+# Cleanup Archive/Binary Installer Staging Files
 # ------------------------------------------------------------
 
-- name: Remove temporary installer
+- name: Remove temporary Jira archive
   ansible.builtin.file:
     path: "{{ jira_temp_dir }}/{{ jira_archive }}"
     state: absent
+  when: jira_archive is defined
+
+- name: Remove temporary Jira binary installer
+  ansible.builtin.file:
+    path: "{{ jira_temp_dir }}/{{ jira_installer }}"
+    state: absent
+  when: jira_installer is defined
+
+- name: Remove temporary Jira installer response file
+  ansible.builtin.file:
+    path: "{{ jira_temp_dir }}/jira-response.varfile"
+    state: absent
 
 # ------------------------------------------------------------
-# Validation
+# Validate Installation Directory
 # ------------------------------------------------------------
 
-- name: Verify Jira installation directory removed
+- name: Check Jira installation directory
   ansible.builtin.stat:
     path: "{{ jira_install_dir }}"
-  register: jira_install
+  register: jira_install_after
 
-- name: Verify Jira home removed
-  ansible.builtin.stat:
-    path: "{{ jira_home_dir }}"
-  register: jira_home
-
-- name: Verify systemd service removed
-  ansible.builtin.stat:
-    path: "/etc/systemd/system/{{ jira_service_name }}.service"
-  register: jira_systemd
-
-- name: Fail if uninstall incomplete
-  ansible.builtin.fail:
-    msg: "Jira uninstall is incomplete."
-  when:
-    - jira_install.stat.exists
-      or jira_home.stat.exists
-      or jira_systemd.stat.exists
-
-- name: Uninstall completed
-  ansible.builtin.debug:
-    msg:
-      - "Jira has been removed successfully."
+- name: Verify Jira installation directory state
+  ansible.builtin.assert:
+    that:
+      - >
+        (jira_remove_install_dir | bool and not jira_install_after.stat.exists)
+        or
+        (not jira_remove_install_dir | bool)
+    fail_msg: "Jira installation directory was not removed."
 
 # ------------------------------------------------------------
-# Summary
+# Validate Jira Home
+# ------------------------------------------------------------
+
+- name: Check Jira Home
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}"
+  register: jira_home_after
+
+- name: Verify Jira Home state
+  ansible.builtin.assert:
+    that:
+      - >
+        (jira_remove_home | bool and not jira_home_after.stat.exists)
+        or
+        (not jira_remove_home | bool)
+    fail_msg: "Jira Home was not removed."
+
+# ------------------------------------------------------------
+# Validate Shared Home
+# ------------------------------------------------------------
+
+- name: Check Jira Shared Home
+  ansible.builtin.stat:
+    path: "{{ jira_shared_dir }}"
+  register: jira_shared_after
+  when: jira_deployment_mode == "cluster"
+
+- name: Verify Jira Shared Home state
+  ansible.builtin.assert:
+    that:
+      - >
+        (jira_remove_shared_home | bool and not jira_shared_after.stat.exists)
+        or
+        (not jira_remove_shared_home | bool)
+    fail_msg: "Jira Shared Home was not removed."
+  when: jira_deployment_mode == "cluster"
+
+# ------------------------------------------------------------
+# Validate systemd Service
+# ------------------------------------------------------------
+
+- name: Check Jira systemd service after uninstall
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ jira_service_name }}.service"
+  register: jira_systemd_after
+
+- name: Verify Jira systemd service removed
+  ansible.builtin.assert:
+    that:
+      - not jira_systemd_after.stat.exists
+    fail_msg: "Jira systemd service still exists."
+
+# ------------------------------------------------------------
+# Validate Jira User
+# ------------------------------------------------------------
+
+- name: Check Jira user after uninstall
+  ansible.builtin.command:
+    cmd: "id {{ jira_user }}"
+  register: jira_user_after
+  changed_when: false
+  failed_when: false
+
+- name: Verify Jira user state
+  ansible.builtin.assert:
+    that:
+      - >
+        (jira_remove_user | bool and jira_user_after.rc != 0)
+        or
+        (not jira_remove_user | bool)
+    fail_msg: "Jira user still exists."
+
+# ------------------------------------------------------------
+# Validate Jira Group
+# ------------------------------------------------------------
+
+- name: Check Jira group after uninstall
+  ansible.builtin.command:
+    cmd: "getent group {{ jira_group }}"
+  register: jira_group_after
+  changed_when: false
+  failed_when: false
+
+- name: Verify Jira group state
+  ansible.builtin.assert:
+    that:
+      - >
+        (jira_remove_group | bool and jira_group_after.rc != 0)
+        or
+        (not jira_remove_group | bool)
+    fail_msg: "Jira group still exists."
+
+# ------------------------------------------------------------
+# Database Safety
+# ------------------------------------------------------------
+
+- name: Report Jira database preservation
+  ansible.builtin.debug:
+    msg: >-
+      Jira database {{ jira_db_name }} on
+      {{ jira_db_host }}:{{ jira_db_port }} is NOT modified by this
+      uninstall playbook.
+
+# ------------------------------------------------------------
+# Uninstall Summary
 # ------------------------------------------------------------
 
 - name: Display Jira uninstall summary
   ansible.builtin.debug:
     msg:
       - "========================================"
-      - "Jira uninstall completed"
-      - "Install Dir : {{ 'REMOVED' if (jira_remove_install_dir | default(true) | bool) else 'PRESERVED' }}"
-      - "Home Dir    : {{ 'REMOVED' if (jira_remove_home | default(false) | bool) else 'PRESERVED' }}"
-      - "Shared Home : {{ 'REMOVED' if (jira_remove_shared_home | default(false) | bool) else 'PRESERVED' }}"
-      - "Service     : REMOVED"
-      - "OS User     : {{ 'REMOVED' if (jira_remove_user | default(false) | bool) else 'PRESERVED' }}"
-      - "OS Group    : {{ 'REMOVED' if (jira_remove_group | default(false) | bool) else 'PRESERVED' }}"
-      - "Database    : NOT MODIFIED"
+      - "Jira uninstall completed successfully"
+      - "Version      : {{ jira_version }}"
+      - "Method       : {{ jira_install_method | default('unknown') }}"
+      - "Install Dir  : {{ 'REMOVED' if (jira_remove_install_dir | bool) else 'PRESERVED' }}"
+      - "Home Dir     : {{ 'REMOVED' if (jira_remove_home | bool) else 'PRESERVED' }}"
+      - "Shared Home  : {{ 'REMOVED' if (jira_remove_shared_home | bool) else 'PRESERVED' }}"
+      - "Service      : REMOVED"
+      - "OS User      : {{ 'REMOVED' if (jira_remove_user | bool) else 'PRESERVED' }}"
+      - "OS Group     : {{ 'REMOVED' if (jira_remove_group | bool) else 'PRESERVED' }}"
+      - "Database     : NOT MODIFIED"
       - "========================================"

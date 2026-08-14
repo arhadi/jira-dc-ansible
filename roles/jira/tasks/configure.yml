@@ -51,14 +51,32 @@
     mode: "0644"
   notify: Restart Jira
 
-- name: Deploy dbconfig.xml
+# ------------------------------------------------------------
+# Jira Database Bootstrap Configuration
+# ------------------------------------------------------------
+
+- name: Check Jira database configuration
+  ansible.builtin.stat:
+    path: "{{ jira_home_dir }}/dbconfig.xml"
+  register: jira_dbconfig_stat
+
+- name: Deploy initial Jira database configuration
   ansible.builtin.template:
     src: dbconfig.xml.j2
     dest: "{{ jira_home_dir }}/dbconfig.xml"
     owner: "{{ jira_user }}"
     group: "{{ jira_group }}"
     mode: "0640"
+  when: not jira_dbconfig_stat.stat.exists
   notify: Restart Jira
+
+- name: Ensure Jira database configuration ownership
+  ansible.builtin.file:
+    path: "{{ jira_home_dir }}/dbconfig.xml"
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    mode: "0640"
+  when: jira_dbconfig_stat.stat.exists
 
 - name: Deploy cluster.properties
   ansible.builtin.template:

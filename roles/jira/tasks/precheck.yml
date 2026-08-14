@@ -1,48 +1,64 @@
 ---
+# ------------------------------------------------------------
+# Jira Data Center Precheck
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Operating System
+# ------------------------------------------------------------
+
 - name: Verify RHEL 9
-  assert:
+  ansible.builtin.assert:
     that:
       - ansible_distribution == "RedHat"
       - ansible_distribution_major_version == "9"
     fail_msg: "Only RHEL 9 is supported."
 
+# ------------------------------------------------------------
+# General Information
+# ------------------------------------------------------------
+
 - name: Show playbook directory
-  debug:
+  ansible.builtin.debug:
     var: playbook_dir
 
 - name: Show Jira variables
-  debug:
+  ansible.builtin.debug:
     msg:
       - "jira_version={{ jira_version }}"
+      - "jira_install_method={{ jira_install_method }}"
       - "jira_archive={{ jira_archive }}"
+      - "jira_installer={{ jira_installer }}"
 
-# ------------------------------------------------------------
-# Verify Jira Installer
-# ------------------------------------------------------------
+# ============================================================
+# Archive Installer Precheck
+# ============================================================
 
-- name: Check Jira installer archive
+- name: Check Jira archive
   ansible.builtin.stat:
     path: "{{ role_path }}/files/{{ jira_archive }}"
     checksum_algorithm: sha256
   delegate_to: localhost
   register: jira_archive_stat
+  when: jira_install_method == "archive"
 
-- name: Verify Jira installer exists
+- name: Verify Jira archive exists
   ansible.builtin.assert:
     that:
       - jira_archive_stat.stat.exists
     fail_msg: |
-      Jira installer not found.
+      Jira archive not found.
 
       Expected:
       {{ role_path }}/files/{{ jira_archive }}
+  when: jira_install_method == "archive"
 
-- name: Verify Jira installer SHA256 checksum
+- name: Verify Jira archive SHA256 checksum
   ansible.builtin.assert:
     that:
       - jira_archive_stat.stat.checksum == jira_archive_sha256
     fail_msg: |
-      Jira installer checksum verification failed.
+      Jira archive checksum verification failed.
 
       Expected:
       {{ jira_archive_sha256 }}
@@ -50,7 +66,53 @@
       Actual:
       {{ jira_archive_stat.stat.checksum }}
     success_msg: |
-      Jira installer checksum verified successfully.
+      Jira archive checksum verified successfully.
+  when: jira_install_method == "archive"
+
+# ============================================================
+# Binary Installer Precheck
+# ============================================================
+
+- name: Check Jira binary installer
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ jira_installer }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  register: jira_installer_stat
+  when: jira_install_method == "installer"
+
+- name: Verify Jira binary installer exists
+  ansible.builtin.assert:
+    that:
+      - jira_installer_stat.stat.exists
+    fail_msg: |
+      Jira binary installer not found.
+
+      Expected:
+      {{ role_path }}/files/{{ jira_installer }}
+  when: jira_install_method == "installer"
+
+- name: Verify Jira binary installer SHA256 checksum
+  ansible.builtin.assert:
+    that:
+      - jira_installer_stat.stat.checksum == jira_installer_sha256
+    fail_msg: |
+      Jira binary installer checksum verification failed.
+
+      Expected:
+      {{ jira_installer_sha256 }}
+
+      Actual:
+      {{ jira_installer_stat.stat.checksum }}
+    success_msg: |
+      Jira binary installer checksum verified successfully.
+  when:
+    - jira_install_method == "installer"
+    - jira_installer_sha256 | default('') | length > 0
+
+# ============================================================
+# Jira User and Group
+# ============================================================
 
 - name: Check Jira user
   ansible.builtin.command:
@@ -84,6 +146,10 @@
         else 'Jira group does not exist (will be created)'
       }}
 
+# ============================================================
+# Directories
+# ============================================================
+
 - name: Check installation directory
   ansible.builtin.stat:
     path: "{{ jira_install_dir }}"
@@ -112,8 +178,13 @@
         else 'Jira home directory does not exist (will be created)'
       }}
 
+# ============================================================
+# Java
+# ============================================================
+
 - name: Check Java
-  ansible.builtin.command: java -version
+  ansible.builtin.command:
+    cmd: java -version
   register: java_version
   changed_when: false
   failed_when: false
@@ -126,6 +197,10 @@
         if java_version.rc == 0
         else 'Java is not installed (will be installed)'
       }}
+
+# ============================================================
+# PostgreSQL
+# ============================================================
 
 - name: Check PostgreSQL connectivity
   ansible.builtin.wait_for:
@@ -145,9 +220,13 @@
         else 'PostgreSQL is NOT reachable'
       }}
 
+# ============================================================
+# Disk Space
+# ============================================================
+
 - name: Check free disk space on /app
   ansible.builtin.command:
-    cmd: "df -BG /app"
+    cmd: "df -BG {{ jira_base_dir }}"
   register: app_disk
   changed_when: false
 
@@ -157,7 +236,12 @@
 
 - name: Extract free disk space
   ansible.builtin.set_fact:
-    app_free_gb: "{{ app_disk.stdout_lines[1].split()[3] | regex_replace('G','') }}"
+    app_free_gb: >-
+      {{
+        app_disk.stdout_lines[1]
+        .split()[3]
+        | regex_replace('G', '')
+      }}
 
 - name: Verify minimum free disk space
   ansible.builtin.assert:
@@ -165,4 +249,3 @@
       - (app_free_gb | int) >= 10
     fail_msg: "{{ jira_base_dir }} requires at least 10 GB of free space."
     success_msg: "{{ jira_base_dir }} has {{ app_free_gb }} GB free."
-

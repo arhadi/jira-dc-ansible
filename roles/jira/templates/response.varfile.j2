@@ -1,0 +1,17 @@
+# install4j response file for Jira Software {{ jira_version }}
+#
+# Managed by Ansible.
+# Do not modify manually.
+
+app.install.service$Boolean=false
+app.jiraHome={{ jira_home_dir }}
+existingInstallationDir=/opt/Jira Software
+httpPort$Long={{ jira_http_port }}
+launch.application$Boolean=false
+portChoice=custom
+rmiPort$Long={{ jira_control_port }}
+sys.adminRights$Boolean=true
+sys.adminRightsUiRootUnix$Boolean=false
+sys.confirmedUpdateInstallationString=false
+sys.installationDir={{ jira_install_dir }}
+sys.languageId=en

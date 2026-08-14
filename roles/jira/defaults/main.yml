@@ -3,6 +3,12 @@
 # Jira Defaults
 # ------------------------------------------------------------
 
+# Installation method:
+#   archive   = Atlassian tar.gz archive
+#   installer = Atlassian Linux .bin installer
+
+jira_install_method: "archive"
+
 jira_service_enabled: true
 jira_service_started: true
 

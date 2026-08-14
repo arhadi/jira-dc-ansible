@@ -1,0 +1,290 @@
+---
+# ------------------------------------------------------------
+# Jira Linux Binary Installer
+# ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Verify Binary Installer
+# ------------------------------------------------------------
+
+- name: Verify Jira binary installer exists
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ jira_installer }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  register: jira_binary_installer
+
+- name: Fail if Jira binary installer is missing
+  ansible.builtin.fail:
+    msg: |
+      Jira binary installer not found.
+
+      Expected:
+      {{ role_path }}/files/{{ jira_installer }}
+  when: not jira_binary_installer.stat.exists
+
+- name: Verify Jira binary installer checksum
+  ansible.builtin.assert:
+    that:
+      - jira_binary_installer.stat.checksum == jira_installer_sha256
+    fail_msg: |
+      Jira binary installer checksum verification failed.
+
+      Expected:
+      {{ jira_installer_sha256 }}
+
+      Actual:
+      {{ jira_binary_installer.stat.checksum }}
+    success_msg: "Jira binary installer checksum verified."
+  when: jira_installer_sha256 | default('') | length > 0
+
+# ------------------------------------------------------------
+# Check Existing Installation
+# ------------------------------------------------------------
+
+- name: Check if Jira is already installed
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}/bin/start-jira.sh"
+  register: jira_binary_existing_installation
+
+- name: Display existing Jira installation status
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        'Jira is already installed - binary installation will be skipped'
+        if jira_binary_existing_installation.stat.exists
+        else 'Jira is not installed - binary installation will proceed'
+      }}
+
+# ------------------------------------------------------------
+# Prepare Temporary Staging Area
+# ------------------------------------------------------------
+
+- name: Ensure temporary staging directory exists
+  ansible.builtin.file:
+    path: "{{ jira_temp_dir }}"
+    state: directory
+    mode: "0755"
+
+# ------------------------------------------------------------
+# Remove Incomplete Installation
+# ------------------------------------------------------------
+
+- name: Check Jira installation directory
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}"
+  register: jira_binary_install_dir
+
+- name: Remove incomplete Jira installation
+  ansible.builtin.file:
+    path: "{{ jira_install_dir }}"
+    state: absent
+  when:
+    - jira_binary_install_dir.stat.exists
+    - not jira_binary_existing_installation.stat.exists
+
+# ------------------------------------------------------------
+# Copy Binary Installer
+# ------------------------------------------------------------
+
+- name: Copy Jira binary installer to target
+  ansible.builtin.copy:
+    src: "{{ jira_installer }}"
+    dest: "{{ jira_temp_dir }}/{{ jira_installer }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: not jira_binary_existing_installation.stat.exists
+
+# ------------------------------------------------------------
+# Verify Staged Binary
+# ------------------------------------------------------------
+
+- name: Calculate staged Jira installer SHA256
+  ansible.builtin.stat:
+    path: "{{ jira_temp_dir }}/{{ jira_installer }}"
+    checksum_algorithm: sha256
+  register: jira_staged_binary
+  when: not jira_binary_existing_installation.stat.exists
+
+- name: Verify staged Jira installer SHA256
+  ansible.builtin.assert:
+    that:
+      - jira_staged_binary.stat.checksum == jira_installer_sha256
+    fail_msg: |
+      Staged Jira installer checksum verification failed.
+
+      Expected:
+      {{ jira_installer_sha256 }}
+
+      Actual:
+      {{ jira_staged_binary.stat.checksum }}
+    success_msg: "Staged Jira binary installer checksum verified."
+  when:
+    - not jira_binary_existing_installation.stat.exists
+    - jira_installer_sha256 | default('') | length > 0
+
+# ------------------------------------------------------------
+# Installer Response File
+# ------------------------------------------------------------
+
+- name: Deploy Jira installer response file
+  ansible.builtin.template:
+    src: response.varfile.j2
+    dest: "{{ jira_temp_dir }}/jira-response.varfile"
+    owner: root
+    group: root
+    mode: "0600"
+  when: not jira_binary_existing_installation.stat.exists
+
+# ------------------------------------------------------------
+# Display Binary Installation Parameters
+# ------------------------------------------------------------
+
+- name: Display Jira binary installation parameters
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "Jira Binary Installation"
+      - "Version         : {{ jira_version }}"
+      - "Installer       : {{ jira_installer }}"
+      - "Install Dir     : {{ jira_install_dir }}"
+      - "Home Dir        : {{ jira_home_dir }}"
+      - "HTTP Port       : {{ jira_http_port }}"
+      - "Control Port    : {{ jira_control_port }}"
+      - "Install Service : false"
+      - "Start Jira      : false"
+      - "========================================"
+  when: not jira_binary_existing_installation.stat.exists
+
+# ------------------------------------------------------------
+# Execute Binary Installer
+# ------------------------------------------------------------
+
+- name: Install Jira using binary installer
+  ansible.builtin.command:
+    argv:
+      - "{{ jira_temp_dir }}/{{ jira_installer }}"
+      - "-q"
+      - "-varfile"
+      - "{{ jira_temp_dir }}/jira-response.varfile"
+      - "-dir"
+      - "{{ jira_install_dir }}"
+  args:
+    creates: "{{ jira_install_dir }}/bin/start-jira.sh"
+  register: jira_binary_install_result
+  when: not jira_binary_existing_installation.stat.exists
+
+
+# ------------------------------------------------------------
+# Normalize Installer Runtime User
+# ------------------------------------------------------------
+
+- name: Check Jira installer generated user configuration
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}/bin/user.sh"
+  register: jira_installer_user_file
+
+- name: Configure Jira installer runtime user
+  ansible.builtin.lineinfile:
+    path: "{{ jira_install_dir }}/bin/user.sh"
+    regexp: '^JIRA_USER='
+    line: 'JIRA_USER="{{ jira_user }}" # user managed by Ansible'
+    backup: true
+  when: jira_installer_user_file.stat.exists
+
+- name: Verify Jira installer runtime user
+  ansible.builtin.command:
+    cmd: "grep '^JIRA_USER=' {{ jira_install_dir }}/bin/user.sh"
+  register: jira_runtime_user
+  changed_when: false
+  when: jira_installer_user_file.stat.exists
+
+- name: Validate Jira installer runtime user
+  ansible.builtin.assert:
+    that:
+      - '"JIRA_USER=\"" ~ jira_user ~ "\"" in jira_runtime_user.stdout'
+    fail_msg: |
+      Jira installer runtime user configuration is incorrect.
+
+      Expected user : {{ jira_user }}
+      Configuration : {{ jira_runtime_user.stdout | default('not found') }}
+    success_msg: "Jira installer runtime user configured as {{ jira_user }}."
+  when: jira_installer_user_file.stat.exists
+
+# ------------------------------------------------------------
+# Verify Installation
+# ------------------------------------------------------------
+
+- name: Verify Jira installation directory
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}"
+  register: jira_binary_dir_verify
+
+- name: Verify Jira startup script
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}/bin/start-jira.sh"
+  register: jira_binary_start_verify
+
+- name: Verify Jira shutdown script
+  ansible.builtin.stat:
+    path: "{{ jira_install_dir }}/bin/stop-jira.sh"
+  register: jira_binary_stop_verify
+
+- name: Validate Jira binary installation
+  ansible.builtin.assert:
+    that:
+      - jira_binary_dir_verify.stat.exists
+      - jira_binary_dir_verify.stat.isdir
+      - jira_binary_start_verify.stat.exists
+      - jira_binary_stop_verify.stat.exists
+    fail_msg: |
+      Jira binary installation validation failed.
+
+      Install directory : {{ jira_install_dir }}
+      Directory exists  : {{ jira_binary_dir_verify.stat.exists | default(false) }}
+      start-jira.sh     : {{ jira_binary_start_verify.stat.exists | default(false) }}
+      stop-jira.sh      : {{ jira_binary_stop_verify.stat.exists | default(false) }}
+
+# ------------------------------------------------------------
+# Normalize Ownership
+# ------------------------------------------------------------
+
+- name: Ensure Jira installation ownership
+  ansible.builtin.file:
+    path: "{{ jira_install_dir }}"
+    owner: "{{ jira_user }}"
+    group: "{{ jira_group }}"
+    recurse: true
+
+# ------------------------------------------------------------
+# Cleanup Temporary Installer
+# ------------------------------------------------------------
+
+- name: Remove temporary Jira binary installer
+  ansible.builtin.file:
+    path: "{{ jira_temp_dir }}/{{ jira_installer }}"
+    state: absent
+
+- name: Remove Jira installer response file
+  ansible.builtin.file:
+    path: "{{ jira_temp_dir }}/jira-response.varfile"
+    state: absent
+
+# ------------------------------------------------------------
+# Installation Summary
+# ------------------------------------------------------------
+
+- name: Display Jira binary installation summary
+  ansible.builtin.debug:
+    msg:
+      - "========================================"
+      - "Jira binary installation completed"
+      - "Version      : {{ jira_version }}"
+      - "Method       : {{ jira_install_method }}"
+      - "Install Dir  : {{ jira_install_dir }}"
+      - "Home Dir     : {{ jira_home_dir }}"
+      - "HTTP Port    : {{ jira_http_port }}"
+      - "Control Port : {{ jira_control_port }}"
+      - "Installer    : {{ jira_installer }}"
+      - "========================================"

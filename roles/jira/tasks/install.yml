@@ -1,172 +1,43 @@
 ---
 # ------------------------------------------------------------
-# Jira Installation
+# Jira Installation Dispatcher
 # ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Verify Installer on Ansible Controller
-# ------------------------------------------------------------
-
-- name: Verify Jira installer exists
-  ansible.builtin.stat:
-    path: "{{ role_path }}/files/{{ jira_archive }}"
-  delegate_to: localhost
-  register: jira_installer
-
-- name: Fail if Jira installer is missing
-  ansible.builtin.fail:
-    msg: "Installer not found: {{ role_path }}/files/{{ jira_archive }}"
-  when: not jira_installer.stat.exists
-
-# ------------------------------------------------------------
-# Verify Existing Installation
-# ------------------------------------------------------------
-
-- name: Check if Jira is already installed
-  ansible.builtin.stat:
-    path: "{{ jira_install_dir }}/bin/start-jira.sh"
-  register: jira_installation
-
-# ------------------------------------------------------------
-# Prepare Temporary Staging Area
-# ------------------------------------------------------------
-
-- name: Ensure temporary staging directory exists
-  ansible.builtin.file:
-    path: "{{ jira_temp_dir }}"
-    state: directory
-    mode: "0755"
-
-- name: Copy Jira installer to target
-  ansible.builtin.copy:
-    src: "{{ jira_archive }}"
-    dest: "{{ jira_temp_dir }}/{{ jira_archive }}"
-    mode: "0644"
-  when: not jira_installation.stat.exists
-
-
-# ------------------------------------------------------------
-# Remove Incomplete Installation
-# ------------------------------------------------------------
-
-- name: Check installation directory
-  ansible.builtin.stat:
-    path: "{{ jira_install_dir }}"
-  register: jira_install_dir_stat
-
-- name: Remove incomplete Jira installation
-  ansible.builtin.file:
-    path: "{{ jira_install_dir }}"
-    state: absent
-  when:
-    - jira_install_dir_stat.stat.exists
-    - not jira_installation.stat.exists
-
-# ------------------------------------------------------------
-# Remove Previous Extracted Source
-# ------------------------------------------------------------
-
-- name: Remove previously extracted installer directory
-  ansible.builtin.file:
-    path: "{{ jira_install_dir | dirname }}/{{ jira_extract_dir }}"
-    state: absent
-  when: not jira_installation.stat.exists
-
-# ------------------------------------------------------------
-# Extract Jira Software
-# ------------------------------------------------------------
-
-- name: Extract Jira archive
-  ansible.builtin.unarchive:
-    src: "{{ jira_temp_dir }}/{{ jira_archive }}"
-    dest: "{{ jira_install_dir | dirname }}"
-    remote_src: true
-    owner: "{{ jira_user }}"
-    group: "{{ jira_group }}"
-  when: not jira_installation.stat.exists
-
-# ------------------------------------------------------------
-# Rename Installation Directory
-# ------------------------------------------------------------
-
-- name: Rename extracted Jira directory
-  ansible.builtin.command:
-    cmd: >
-      mv
-      {{ jira_install_dir | dirname }}/{{ jira_extract_dir }}
-      {{ jira_install_dir }}
-  args:
-    creates: "{{ jira_install_dir }}"
-  when:
-    - not jira_installation.stat.exists
-    - jira_extract_dir != (jira_install_dir | basename)
-
-# ------------------------------------------------------------
-# Ensure Installation Ownership
-# ------------------------------------------------------------
-
-- name: Ensure Jira installation ownership
-  ansible.builtin.file:
-    path: "{{ jira_install_dir }}"
-    owner: "{{ jira_user }}"
-    group: "{{ jira_group }}"
-    recurse: true
-
-# ------------------------------------------------------------
-# Validate Installation
-# ------------------------------------------------------------
-
-- name: Verify Jira startup script
-  ansible.builtin.stat:
-    path: "{{ jira_install_dir }}/bin/start-jira.sh"
-  register: jira_install_verify
-
-- name: Verify Jira shutdown script
-  ansible.builtin.stat:
-    path: "{{ jira_install_dir }}/bin/stop-jira.sh"
-  register: jira_stop_verify
-
-- name: Verify Jira installation directory
-  ansible.builtin.stat:
-    path: "{{ jira_install_dir }}"
-  register: jira_dir_verify
-
-- name: Validate Jira installation
-  ansible.builtin.assert:
-    that:
-      - jira_dir_verify.stat.exists
-      - jira_dir_verify.stat.isdir
-      - jira_install_verify.stat.exists
-      - jira_stop_verify.stat.exists
-    fail_msg: |
-      Jira installation validation failed.
-
-      Install directory : {{ jira_install_dir }}
-      Directory exists  : {{ jira_dir_verify.stat.exists | default(false) }}
-      start-jira.sh     : {{ jira_install_verify.stat.exists | default(false) }}
-      stop-jira.sh      : {{ jira_stop_verify.stat.exists | default(false) }}
-
-# ------------------------------------------------------------
-# Cleanup Temporary Files
-# ------------------------------------------------------------
-
-- name: Remove temporary installer archive
-  ansible.builtin.file:
-    path: "{{ jira_temp_dir }}/{{ jira_archive }}"
-    state: absent
-
-# ------------------------------------------------------------
-# Installation Summary
-# ------------------------------------------------------------
-
-- name: Display installation summary
+- name: Display selected Jira installation method
   ansible.builtin.debug:
     msg:
       - "========================================"
-      - "Jira installation completed"
-      - "Version        : {{ jira_version }}"
-      - "Install Dir    : {{ jira_install_dir }}"
-      - "Home Dir       : {{ jira_home_dir }}"
-      - "Temp Directory : {{ jira_temp_dir }}"
-      - "Archive        : {{ jira_archive }}"
+      - "Jira Installation"
+      - "Version : {{ jira_version }}"
+      - "Method  : {{ jira_install_method }}"
       - "========================================"
+
+# ------------------------------------------------------------
+# Validate Installation Method
+# ------------------------------------------------------------
+
+- name: Validate Jira installation method
+  ansible.builtin.assert:
+    that:
+      - jira_install_method in ['archive', 'installer']
+    fail_msg: >-
+      Unsupported Jira installation method '{{ jira_install_method }}'.
+      Supported methods are: archive, installer
+    success_msg: >-
+      Jira installation method '{{ jira_install_method }}' is valid.
+
+# ------------------------------------------------------------
+# Archive Installation
+# ------------------------------------------------------------
+
+- name: Install Jira using archive
+  ansible.builtin.include_tasks: install_archive.yml
+  when: jira_install_method == 'archive'
+
+# ------------------------------------------------------------
+# Binary Installer Installation
+# ------------------------------------------------------------
+
+- name: Install Jira using Linux binary installer
+  ansible.builtin.include_tasks: install_installer.yml
+  when: jira_install_method == 'installer'

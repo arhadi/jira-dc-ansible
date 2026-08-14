@@ -1,22 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
 <jira-database-config>
-    <name>defaultDS</name>
-
-    <delegator-name>default</delegator-name>
-
-    <database-type>{{ jira_database_type }}</database-type>
-
-    <jdbc-datasource>
-        <url>jdbc:postgresql://{{ jira_db_host }}:{{ jira_db_port }}/{{ jira_db_name }}</url>
-
-        <driver-class>org.postgresql.Driver</driver-class>
-
-        <username>{{ jira_db_username }}</username>
-
-        <password>{{ jira_db_password }}</password>
-
-        <pool-min-size>20</pool-min-size>
-        <pool-max-size>20</pool-max-size>
-
-        <validation-query>select 1</validation-query>
-    </jdbc-datasource>
+  <name>defaultDS</name>
+  <delegator-name>default</delegator-name>
+  <database-type>{{ jira_database_type }}</database-type>
+  <jdbc-datasource>
+    <url>jdbc:postgresql://{{ jira_db_host }}:{{ jira_db_port }}/{{ jira_db_name }}</url>
+    <driver-class>{{ jira_db_driver }}</driver-class>
+    <username>{{ jira_db_username }}</username>
+    <password>{{ jira_db_password }}</password>
+    <pool-min-size>20</pool-min-size>
+    <pool-max-size>20</pool-max-size>
+    <validation-query>select 1</validation-query>
+    <pool-max-idle>20</pool-max-idle>
+    <connection-properties>tcpKeepAlive=true</connection-properties>
+  </jdbc-datasource>
 </jira-database-config>
